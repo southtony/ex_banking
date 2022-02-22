@@ -113,4 +113,36 @@ defmodule ExBanking do
       {:error, _} -> {:error, :wrong_arguments}
     end
   end
+
+  @spec send(
+          from_user :: String.t(),
+          to_user :: String.t(),
+          amount :: number,
+          currency :: String.t()
+        ) ::
+          {:ok, from_user_balance :: number, to_user_balance :: number}
+          | {:error,
+             :wrong_arguments
+             | :not_enough_money
+             | :sender_does_not_exist
+             | :receiver_does_not_exist
+             | :too_many_requests_to_sender
+             | :too_many_requests_to_receiver}
+
+  def send(from_user, to_user, amount, currency) do
+    with {{:ok, _sender}, :sender} <-
+           {ExBanking.Core.User.get_pid_user_server(from_user), :sender},
+         {{:ok, _receiver}, :receiver} <-
+           {ExBanking.Core.User.get_pid_user_server(to_user), :receiver} do
+      with {:ok, from_user_balance} <- ExBanking.withdraw(from_user, amount, currency),
+           {:ok, to_user_balance} <- ExBanking.deposit(to_user, amount, currency) do
+        {:ok, from_user_balance, to_user_balance}
+      else
+        error -> error
+      end
+    else
+      {{:error, :user_server_not_found}, :sender} -> {:error, :sender_does_not_exist}
+      {{:error, :user_server_not_found}, :receiver} -> {:error, :receiver_does_not_exist}
+    end
+  end
 end

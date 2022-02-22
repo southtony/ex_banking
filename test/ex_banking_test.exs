@@ -103,6 +103,37 @@ defmodule ExBankingTest do
     end
   end
 
+  describe "send/4" do
+    test "send money" do
+      ExBanking.create_user("John")
+      ExBanking.create_user("Bob")
+
+      ExBanking.deposit("John", 1000, "usd")
+      ExBanking.deposit("Bob", 300, "usd")
+
+      assert {:ok, 500.00, 800.00} = ExBanking.send("John", "Bob", 500, "usd")
+    end
+
+    test "when sender doesn't have enough money" do
+      ExBanking.create_user("John")
+      ExBanking.create_user("Bob")
+
+      ExBanking.deposit("John", 10, "usd")
+
+      assert {:error, :not_enough_money} = ExBanking.send("John", "Bob", 500, "usd")
+    end
+
+    test "when sender doesn't exists" do
+      receiver = ExBanking.create_user("John")
+      assert {:error, :sender_does_not_exist} == ExBanking.send("Bob", "John", 12, "usd")
+    end
+
+    test "when receiver doesn't exists" do
+      sender = ExBanking.create_user("Bob")
+      assert {:error, :receiver_does_not_exist} == ExBanking.send("Bob", "John", 12, "usd")
+    end
+  end
+
   describe "complex balance operations per one user" do
     test "a few deposit transactions" do
       ExBanking.create_user("John")
