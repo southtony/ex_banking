@@ -1,6 +1,6 @@
-defmodule ExBanking.Types.User do
+defmodule ExBanking.Types.UserServerState do
   @moduledoc """
-    A struct representing a user
+    A struct representing a UserServerState
   """
 
   use TypedStruct
@@ -8,8 +8,7 @@ defmodule ExBanking.Types.User do
   alias ExBanking.Types.{Transaction, BalanceOperation}
 
   typedstruct do
-    field(:name, String.t(), enforce: true)
     field(:transactions, [Transaction.t()])
-    field(:pending_operations, [BalanceOperation.t()])
+    field(:pending_operations, :queue.queue(BalanceOperation.t()))
   end
 end

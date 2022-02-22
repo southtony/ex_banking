@@ -14,7 +14,23 @@ defmodule ExBanking.UserServerSupervisor do
 
     DynamicSupervisor.start_child(
       __MODULE__,
-      {ExBanking.UserServer, [server_name: registry_server_name]}
+      {ExBanking.OperationProcessing.UserServer, [server_name: registry_server_name]}
     )
+
+    # registry_pool_name = {:via, Registry, {Registry.UserServerNames, server_name <> "Pool"}}
+
+    # DynamicSupervisor.start_child(
+    #   __MODULE__,
+    #   :poolboy.child_spec(:worker, poolboy_config(registry_pool_name))
+    # )
   end
+
+  # defp poolboy_config(name) do
+  #   [
+  #     name: name,
+  #     worker_module: ,
+  #     size: 5,
+  #     max_overflow: 5
+  #   ]
+  # end
 end
