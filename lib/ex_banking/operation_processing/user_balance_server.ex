@@ -18,7 +18,8 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
 
   @impl true
   def handle_cast(
-        {:exec_operation, %Operation{transaction: %Transaction{operation_type: :increase}} = op},
+        {:exec_operation, from,
+         %Operation{transaction: %Transaction{operation_type: :increase}} = op},
         state
       ) do
     transaction = op.transaction
@@ -30,12 +31,15 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
 
     send(op.waiting_client, {:ok, Decimal.to_float(new_amount)})
 
+    GenServer.cast(from, :ack)
+
     {:noreply, new_state}
   end
 
   @impl true
   def handle_cast(
-        {:exec_operation, %Operation{transaction: %Transaction{operation_type: :decrease}} = op},
+        {:exec_operation, from,
+         %Operation{transaction: %Transaction{operation_type: :decrease}} = op},
         state
       ) do
     transaction = op.transaction
@@ -45,20 +49,23 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
 
     if Decimal.negative?(new_amount) do
       send(op.waiting_client, {:error, :not_enough_money})
+      GenServer.cast(from, :ack)
       {:noreply, state}
     else
       send(op.waiting_client, {:ok, Decimal.to_float(new_amount)})
       new_state = Map.put(state, transaction.currency, new_amount)
+      GenServer.cast(from, :ack)
       {:noreply, new_state}
     end
   end
 
   def handle_cast(
-        {:exec_operation, %Operation{action: %Actions.GetBalance{currency: currency}} = op},
+        {:exec_operation, from, %Operation{action: %Actions.GetBalance{currency: currency}} = op},
         state
       ) do
     amount = state[currency] || Decimal.new(0)
     send(op.waiting_client, {:ok, Decimal.to_float(amount)})
+    GenServer.cast(from, :ack)
     {:noreply, state}
   end
 end

@@ -23,7 +23,6 @@ defmodule ExBanking.ServersManagerSupervisor do
              server_name: reg_server_name(name, "PendingOperations"),
              state: %PendingOperationsServerState{
                user_balance_server_name: user_balance_server_name,
-               task_in_progress_exists?: false,
                operations_queue: :queue.new()
              }
            ) do
