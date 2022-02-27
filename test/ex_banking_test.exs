@@ -171,6 +171,34 @@ defmodule ExBankingTest do
       another_user = UUID.uuid1()
       assert {:error, :receiver_does_not_exist} == ExBanking.send(user, another_user, 12, "usd")
     end
+
+    test "when operations limit exceeded for sender", %{user: user} do
+      ExBanking.create_user(user)
+      ExBanking.deposit(user, 100, "usd")
+
+      another_user = UUID.uuid1()
+      ExBanking.create_user(another_user)
+
+      with_mock ExBanking, [:passthrough],
+        withdraw: fn _user, _amount, _currency -> {:error, :too_many_requests_to_user} end do
+        assert {:error, :too_many_requests_to_sender} =
+                 ExBanking.send(user, another_user, 20, "usd")
+      end
+    end
+
+    test "when operations limit exceeded for receiver", %{user: user} do
+      ExBanking.create_user(user)
+      ExBanking.deposit(user, 100, "usd")
+
+      another_user = UUID.uuid1()
+      ExBanking.create_user(another_user)
+
+      with_mock ExBanking, [:passthrough],
+        deposit: fn _user, _amount, _currency -> {:error, :too_many_requests_to_user} end do
+        assert {:error, :too_many_requests_to_receiver} =
+                 ExBanking.send(user, another_user, 20, "usd")
+      end
+    end
   end
 
   describe "complex balance operations per one user" do

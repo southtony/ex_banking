@@ -136,11 +136,23 @@ defmodule ExBanking do
   def send(from_user, to_user, amount, currency) do
     with {:user_exists, :sender} <- {ExBanking.Core.User.user_exists(from_user), :sender},
          {:user_exists, :receiver} <- {ExBanking.Core.User.user_exists(to_user), :receiver} do
-      with {:ok, from_user_balance} <- ExBanking.withdraw(from_user, amount, currency),
-           {:ok, to_user_balance} <- ExBanking.deposit(to_user, amount, currency) do
+      with {{:ok, from_user_balance}, :sender} <-
+             {ExBanking.withdraw(from_user, amount, currency), :sender},
+           {{:ok, to_user_balance}, :receiver} <-
+             {ExBanking.deposit(to_user, amount, currency), :receiver} do
         {:ok, from_user_balance, to_user_balance}
       else
-        error -> error
+        {{:error, :too_many_requests_to_user}, :sender} ->
+          {:error, :too_many_requests_to_sender}
+
+        {{:error, :too_many_requests_to_user}, :receiver} ->
+          {:error, :too_many_requests_to_receiver}
+
+        {{:error, :not_enough_money}, _} ->
+          {:error, :not_enough_money}
+
+        error ->
+          error
       end
     else
       {:user_does_not_exist, :sender} -> {:error, :sender_does_not_exist}
