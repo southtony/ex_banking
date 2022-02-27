@@ -1,7 +1,14 @@
 defmodule ExBankingTest do
-  use ExUnit.Case, async: true
+  # because of Mock using, async is false
+  use ExUnit.Case, async: false
+  use ExUnit.CaseTemplate
 
-  alias ExBanking.Core
+  import Mock
+
+  alias ExBanking.{
+    Core,
+    Queue.Impl.ErlQueue
+  }
 
   setup do
     [user: UUID.uuid1()]
@@ -45,6 +52,15 @@ defmodule ExBankingTest do
     test "user doesn't exists" do
       assert {:error, :user_does_not_exist} = ExBanking.deposit("John", 10, "usd")
     end
+
+    test "when operations limit exceeded", %{user: user} do
+      max_pending_operations = 10
+
+      with_mock ErlQueue, [:passthrough], length: fn _queue -> max_pending_operations end do
+        ExBanking.create_user(user)
+        assert {:error, :too_many_requests_to_user} = ExBanking.deposit(user, 500, "usd")
+      end
+    end
   end
 
   describe "withdraw/3" do
@@ -67,6 +83,24 @@ defmodule ExBankingTest do
     test "user doesn't exists" do
       assert {:error, :user_does_not_exist} = ExBanking.withdraw("John", 10, "usd")
     end
+
+    test "when wrong arguments", %{user: user} do
+      ExBanking.create_user(user)
+      assert {:error, :wrong_arguments} = ExBanking.withdraw(user, 0, "usd")
+      assert {:error, :wrong_arguments} = ExBanking.withdraw(user, -8, "usd")
+      assert {:error, :wrong_arguments} = ExBanking.withdraw(user, "kek", "usd")
+    end
+
+    test "when operations limit exceeded", %{user: user} do
+      ExBanking.create_user(user)
+      ExBanking.deposit(user, 100, "usd")
+
+      max_pending_operations = 10
+
+      with_mock ErlQueue, [:passthrough], length: fn _queue -> max_pending_operations end do
+        assert {:error, :too_many_requests_to_user} = ExBanking.withdraw(user, 50, "usd")
+      end
+    end
   end
 
   describe "get_balance/2" do
@@ -87,6 +121,17 @@ defmodule ExBankingTest do
     test "when wrong arguments", %{user: user} do
       ExBanking.create_user(user)
       assert {:error, :wrong_arguments} = ExBanking.get_balance(user, 5)
+    end
+
+    test "when operations limit exceeded", %{user: user} do
+      ExBanking.create_user(user)
+      ExBanking.deposit(user, 100, "usd")
+
+      max_pending_operations = 10
+
+      with_mock ErlQueue, [:passthrough], length: fn _queue -> max_pending_operations end do
+        assert {:error, :too_many_requests_to_user} = ExBanking.get_balance(user, "usd")
+      end
     end
   end
 
@@ -129,16 +174,23 @@ defmodule ExBankingTest do
   end
 
   describe "complex balance operations per one user" do
-    test "a few deposit transactions", %{user: user} do
+    test "a few different transactions", %{user: user} do
       ExBanking.create_user(user)
 
       ExBanking.deposit(user, 7000, "usd")
       ExBanking.deposit(user, 2500, "usd")
       ExBanking.deposit(user, 100, "usd")
+      ExBanking.deposit(user, 400, "usd")
 
-      {:ok, new_balance} = ExBanking.deposit(user, 400, "usd")
+      ExBanking.deposit(user, 100, "eur")
+      ExBanking.deposit(user, 500, "eur")
+      ExBanking.withdraw(user, 50, "eur")
 
-      assert new_balance == 10000.00
+      {:ok, usd_new_balance} = ExBanking.get_balance(user, "usd")
+      {:ok, eur_new_balance} = ExBanking.get_balance(user, "eur")
+
+      assert usd_new_balance == 10000.00
+      assert eur_new_balance == 550.00
     end
   end
 end
