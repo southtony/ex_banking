@@ -5,7 +5,6 @@ defmodule ExBanking.Queue.Behaviour do
 
   @type queue :: :queue.queue()
 
-
   @callback new() :: queue()
 
   @callback enqueue(any(), queue()) :: queue()
