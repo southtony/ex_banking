@@ -22,7 +22,9 @@ defmodule ExBanking.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:typed_struct, "~> 0.3.0"}
+      {:typed_struct, "~> 0.3.0"},
+      {:decimal, "~> 2.0"},
+      { :elixir_uuid, "~> 1.2" }
     ]
   end
 end

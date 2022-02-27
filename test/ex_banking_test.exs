@@ -1,36 +1,23 @@
 defmodule ExBankingTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias ExBanking.Core
 
   setup do
-    on_exit(fn ->
-      ExBanking.UserServerSupervisor
-      |> DynamicSupervisor.which_children()
-      |> Enum.each(fn {_, pid, _, _} ->
-        DynamicSupervisor.terminate_child(ExBanking.UserServerSupervisor, pid)
-      end)
-    end)
-
-    :ok
+    [user: UUID.uuid1()]
   end
 
   describe "create_user/1" do
-    test "new user" do
-      create_user_response = ExBanking.create_user("John")
+    test "new user", %{user: user} do
+      create_user_response = ExBanking.create_user(user)
 
-      assert {:ok, _user_server_pid} = Core.User.get_pid_user_server("John")
-
-      {:ok, user_server_pid} = Core.User.get_pid_user_server("John")
-
-      assert Process.alive?(user_server_pid)
-
+      assert :user_exists = Core.User.user_exists(user)
       assert create_user_response == :ok
     end
 
-    test "when user already exists" do
-      ExBanking.create_user("John")
-      assert {:error, :user_already_exists} = ExBanking.create_user("John")
+    test "when user already exists", %{user: user} do
+      ExBanking.create_user(user)
+      assert {:error, :user_already_exists} = ExBanking.create_user(user)
     end
 
     test "when wrong username" do
@@ -43,16 +30,16 @@ defmodule ExBankingTest do
   end
 
   describe "deposit/3" do
-    test "make a deposit" do
-      ExBanking.create_user("John")
-      assert {:ok, 7000.00} = ExBanking.deposit("John", 7000, "usd")
+    test "make a deposit", %{user: user} do
+      ExBanking.create_user(user)
+      assert {:ok, 7000.00} = ExBanking.deposit(user, 7000, "usd")
     end
 
-    test "when wrong arguments" do
-      ExBanking.create_user("John")
-      assert {:error, :wrong_arguments} = ExBanking.deposit("John", 0, "usd")
-      assert {:error, :wrong_arguments} = ExBanking.deposit("John", -8, "usd")
-      assert {:error, :wrong_arguments} = ExBanking.deposit("John", "kek", "usd")
+    test "when wrong arguments", %{user: user} do
+      ExBanking.create_user(user)
+      assert {:error, :wrong_arguments} = ExBanking.deposit(user, 0, "usd")
+      assert {:error, :wrong_arguments} = ExBanking.deposit(user, -8, "usd")
+      assert {:error, :wrong_arguments} = ExBanking.deposit(user, "kek", "usd")
     end
 
     test "user doesn't exists" do
@@ -61,20 +48,20 @@ defmodule ExBankingTest do
   end
 
   describe "withdraw/3" do
-    test "make a withdraw" do
-      ExBanking.create_user("John")
+    test "make a withdraw", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 7000, "usd")
-      ExBanking.deposit("John", 1000, "eur")
+      ExBanking.deposit(user, 7000, "usd")
+      ExBanking.deposit(user, 1000, "eur")
 
-      assert {:ok, 6500.00} = ExBanking.withdraw("John", 500, "usd")
+      assert {:ok, 6500.00} = ExBanking.withdraw(user, 500, "usd")
     end
 
-    test "when not enough moeny" do
-      ExBanking.create_user("John")
+    test "when not enough moeny", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 7000, "usd")
-      assert {:error, :not_enough_money} = ExBanking.withdraw("John", 10000, "usd")
+      ExBanking.deposit(user, 7000, "usd")
+      assert {:error, :not_enough_money} = ExBanking.withdraw(user, 10000, "usd")
     end
 
     test "user doesn't exists" do
@@ -83,66 +70,73 @@ defmodule ExBankingTest do
   end
 
   describe "get_balance/2" do
-    test "get balance" do
-      ExBanking.create_user("John")
+    test "get balance", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 7000, "usd")
-      ExBanking.deposit("John", 1000, "eur")
+      ExBanking.deposit(user, 7000, "usd")
+      ExBanking.deposit(user, 1000, "eur")
 
-      assert {:ok, 1000.00} = ExBanking.get_balance("John", "eur")
-      assert {:ok, 7000.00} = ExBanking.get_balance("John", "usd")
+      assert {:ok, 1000.00} = ExBanking.get_balance(user, "eur")
+      assert {:ok, 7000.00} = ExBanking.get_balance(user, "usd")
     end
 
-    test "user doesn't exists" do
-      assert {:error, :user_does_not_exist} = ExBanking.get_balance("John", "usd")
+    test "user doesn't exists", %{user: user} do
+      assert {:error, :user_does_not_exist} = ExBanking.get_balance(user, "usd")
     end
 
-    test "when wrong arguments" do
-      ExBanking.create_user("John")
-      assert {:error, :wrong_arguments} = ExBanking.get_balance("John", 5)
+    test "when wrong arguments", %{user: user} do
+      ExBanking.create_user(user)
+      assert {:error, :wrong_arguments} = ExBanking.get_balance(user, 5)
     end
   end
 
   describe "send/4" do
-    test "send money" do
-      ExBanking.create_user("John")
-      ExBanking.create_user("Bob")
+    test "send money", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 1000, "usd")
-      ExBanking.deposit("Bob", 300, "usd")
+      another_user = UUID.uuid1()
+      ExBanking.create_user(another_user)
 
-      assert {:ok, 500.00, 800.00} = ExBanking.send("John", "Bob", 500, "usd")
+      ExBanking.deposit(user, 1000, "usd")
+      ExBanking.deposit(another_user, 300, "usd")
+
+      assert {:ok, 500.00, 800.00} = ExBanking.send(user, another_user, 500, "usd")
     end
 
-    test "when sender doesn't have enough money" do
-      ExBanking.create_user("John")
-      ExBanking.create_user("Bob")
+    test "when sender doesn't have enough money", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 10, "usd")
+      another_user = UUID.uuid1()
+      ExBanking.create_user(another_user)
 
-      assert {:error, :not_enough_money} = ExBanking.send("John", "Bob", 500, "usd")
+      ExBanking.deposit(user, 10, "usd")
+
+      assert {:error, :not_enough_money} = ExBanking.send(user, another_user, 500, "usd")
     end
 
-    test "when sender doesn't exists" do
-      receiver = ExBanking.create_user("John")
-      assert {:error, :sender_does_not_exist} == ExBanking.send("Bob", "John", 12, "usd")
+    test "when sender doesn't exists", %{user: user} do
+      ExBanking.create_user(user)
+      another_user = UUID.uuid1()
+      assert {:error, :sender_does_not_exist} == ExBanking.send(another_user, user, 12, "usd")
     end
 
-    test "when receiver doesn't exists" do
-      sender = ExBanking.create_user("Bob")
-      assert {:error, :receiver_does_not_exist} == ExBanking.send("Bob", "John", 12, "usd")
+    test "when receiver doesn't exists", %{user: user} do
+      ExBanking.create_user(user)
+
+      another_user = UUID.uuid1()
+      assert {:error, :receiver_does_not_exist} == ExBanking.send(user, another_user, 12, "usd")
     end
   end
 
   describe "complex balance operations per one user" do
-    test "a few deposit transactions" do
-      ExBanking.create_user("John")
+    test "a few deposit transactions", %{user: user} do
+      ExBanking.create_user(user)
 
-      ExBanking.deposit("John", 7000, "usd")
-      ExBanking.deposit("John", 2500, "usd")
-      ExBanking.deposit("John", 100, "usd")
+      ExBanking.deposit(user, 7000, "usd")
+      ExBanking.deposit(user, 2500, "usd")
+      ExBanking.deposit(user, 100, "usd")
 
-      {:ok, new_balance} = ExBanking.deposit("John", 400, "usd")
+      {:ok, new_balance} = ExBanking.deposit(user, 400, "usd")
 
       assert new_balance == 10000.00
     end

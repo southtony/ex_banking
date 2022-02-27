@@ -3,24 +3,25 @@ defmodule ExBanking do
     Banking API
   """
 
-  alias ExBanking.Core.Validator
+  alias ExBanking.Core.{Validator, User}
 
   alias ExBanking.Types.{
-    BalanceOperation,
+    Operation,
     Transaction,
-    Currency
+    Actions
   }
 
   @spec create_user(user :: String.t()) :: :ok | {:error, :wrong_arguments | :user_already_exists}
   def create_user(user) do
-    with {:ok, :user_is_valid} <- Validator.validate_user(user) do
-      case ExBanking.UserServerSupervisor.add_user_server(user) do
-        {:ok, _user_server_pid} -> :ok
-        {:error, {:already_started, _}} -> {:error, :user_already_exists}
-        other -> IO.inspect(other)
+    with {:ok, :user_is_valid} <- Validator.validate_user(user),
+         :user_does_not_exist <- User.user_exists(user) do
+      case ExBanking.ServersManagerSupervisor.add_user(user) do
+        :ok -> :ok
+        other -> raise "Something went wrong. Message: #{inspect(other)}"
       end
     else
       {:error, :user_not_valid} -> {:error, :wrong_arguments}
+      :user_exists -> {:error, :user_already_exists}
     end
   end
 
@@ -30,27 +31,27 @@ defmodule ExBanking do
 
   def deposit(user, amount, currency) do
     with {:ok, :user_is_valid} <- Validator.validate_user(user),
+         :user_exists <- ExBanking.Core.User.user_exists(user),
          {:ok, :amount_is_valid} <- Validator.validate_amount(amount),
          {:ok, :currency_is_valid} <- Validator.validate_currency(currency),
-         {:ok, converted_amount} <- ExBanking.Core.DecimalConverter.convert_with_round(amount),
-         {:ok, user_server} <- ExBanking.Core.User.get_pid_user_server(user) do
+         {:ok, converted_amount} <- ExBanking.Core.DecimalConverter.convert_with_round(amount) do
       transaction = %Transaction{
         amount: converted_amount,
-        currency: %Currency{name: currency},
+        currency: currency,
         operation_type: :increase
       }
 
-      operation = %BalanceOperation{
+      operation = %Operation{
         transaction: transaction,
-        action: :increase
+        waiting_client: self()
       }
 
-      case ExBanking.OperationProcessing.UserServer.execute(user_server, operation) do
+      case ExBanking.API.UserBalance.execute(user, operation) do
         {:ok, user_balance} -> {:ok, user_balance}
         {:error, :operation_state_full} -> {:error, :too_many_requests_to_user}
       end
     else
-      {:error, :user_server_not_found} -> {:error, :user_does_not_exist}
+      :user_does_not_exist -> {:error, :user_does_not_exist}
       {:error, _} -> {:error, :wrong_arguments}
     end
   end
@@ -65,28 +66,28 @@ defmodule ExBanking do
 
   def withdraw(user, amount, currency) do
     with {:ok, :user_is_valid} <- Validator.validate_user(user),
+         :user_exists <- ExBanking.Core.User.user_exists(user),
          {:ok, :amount_is_valid} <- Validator.validate_amount(amount),
          {:ok, :currency_is_valid} <- Validator.validate_currency(currency),
-         {:ok, converted_amount} <- ExBanking.Core.DecimalConverter.convert_with_round(amount),
-         {:ok, user_server} <- ExBanking.Core.User.get_pid_user_server(user) do
+         {:ok, converted_amount} <- ExBanking.Core.DecimalConverter.convert_with_round(amount) do
       transaction = %Transaction{
         amount: converted_amount,
-        currency: %Currency{name: currency},
+        currency: currency,
         operation_type: :decrease
       }
 
-      operation = %BalanceOperation{
+      operation = %Operation{
         transaction: transaction,
-        action: :decrease
+        waiting_client: self()
       }
 
-      case ExBanking.OperationProcessing.UserServer.execute(user_server, operation) do
+      case ExBanking.API.UserBalance.execute(user, operation) do
         {:ok, user_balance} -> {:ok, user_balance}
         {:error, :operation_state_full} -> {:error, :too_many_requests_to_user}
         {:error, :not_enough_money} -> {:error, :not_enough_money}
       end
     else
-      {:error, :user_server_not_found} -> {:error, :user_does_not_exist}
+      :user_does_not_exist -> {:error, :user_does_not_exist}
       {:error, _} -> {:error, :wrong_arguments}
     end
   end
@@ -97,19 +98,19 @@ defmodule ExBanking do
 
   def get_balance(user, currency) do
     with {:ok, :user_is_valid} <- Validator.validate_user(user),
-         {:ok, :currency_is_valid} <- Validator.validate_currency(currency),
-         {:ok, user_server} <- ExBanking.Core.User.get_pid_user_server(user) do
-      operation = %BalanceOperation{
-        action: :get_balance,
-        currency: %Currency{name: currency}
+         :user_exists <- ExBanking.Core.User.user_exists(user),
+         {:ok, :currency_is_valid} <- Validator.validate_currency(currency) do
+      operation = %Operation{
+        action: %Actions.GetBalance{currency: currency},
+        waiting_client: self()
       }
 
-      case ExBanking.OperationProcessing.UserServer.execute(user_server, operation) do
+      case ExBanking.API.UserBalance.execute(user, operation) do
         {:ok, user_balance} -> {:ok, user_balance}
         {:error, :operation_state_full} -> {:error, :too_many_requests_to_user}
       end
     else
-      {:error, :user_server_not_found} -> {:error, :user_does_not_exist}
+      :user_does_not_exist -> {:error, :user_does_not_exist}
       {:error, _} -> {:error, :wrong_arguments}
     end
   end
@@ -130,10 +131,8 @@ defmodule ExBanking do
              | :too_many_requests_to_receiver}
 
   def send(from_user, to_user, amount, currency) do
-    with {{:ok, _sender}, :sender} <-
-           {ExBanking.Core.User.get_pid_user_server(from_user), :sender},
-         {{:ok, _receiver}, :receiver} <-
-           {ExBanking.Core.User.get_pid_user_server(to_user), :receiver} do
+    with {:user_exists, :sender} <- {ExBanking.Core.User.user_exists(from_user), :sender},
+         {:user_exists, :receiver} <- {ExBanking.Core.User.user_exists(to_user), :receiver} do
       with {:ok, from_user_balance} <- ExBanking.withdraw(from_user, amount, currency),
            {:ok, to_user_balance} <- ExBanking.deposit(to_user, amount, currency) do
         {:ok, from_user_balance, to_user_balance}
@@ -141,8 +140,8 @@ defmodule ExBanking do
         error -> error
       end
     else
-      {{:error, :user_server_not_found}, :sender} -> {:error, :sender_does_not_exist}
-      {{:error, :user_server_not_found}, :receiver} -> {:error, :receiver_does_not_exist}
+      {:user_does_not_exist, :sender} -> {:error, :sender_does_not_exist}
+      {:user_does_not_exist, :receiver} -> {:error, :receiver_does_not_exist}
     end
   end
 end

@@ -1,8 +1,11 @@
 defmodule ExBanking.Core.User do
-  def get_pid_user_server(name) do
-    case Registry.lookup(Registry.UserServerNames, name) do
-      [{pid, _}] -> {:ok, pid}
-      [] -> {:error, :user_server_not_found}
+  alias ExBanking.Core.ServerManager
+  alias ExBanking.Types.Servers.UserBalanceServer
+
+  def user_exists(name) do
+    case ServerManager.get_server(name, %UserBalanceServer{}) do
+      {:ok, _pid} -> :user_exists
+      {:error, :server_not_found} -> :user_does_not_exist
     end
   end
 end
