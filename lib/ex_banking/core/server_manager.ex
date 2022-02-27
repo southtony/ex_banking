@@ -4,10 +4,12 @@ defmodule ExBanking.Core.ServerManager do
     UserBalanceServer
   }
 
-  @spec get_server(String.t(), UserBalanceServer.t()) :: {:ok, pid()} | {:error, :server_not_found}
+  @spec get_server(String.t(), UserBalanceServer.t()) ::
+          {:ok, pid()} | {:error, :server_not_found}
   def get_server(name, %UserBalanceServer{}), do: _get_server(name)
 
-  @spec get_server(String.t(), PendingOperationsServer.t()) :: {:ok, pid()} | {:error, :server_not_found}
+  @spec get_server(String.t(), PendingOperationsServer.t()) ::
+          {:ok, pid()} | {:error, :server_not_found}
   def get_server(name, %PendingOperationsServer{}) do
     _get_server(name, "PendingOperations")
   end

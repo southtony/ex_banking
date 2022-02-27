@@ -35,22 +35,34 @@ defmodule ExBanking.OperationProcessing.PendingOperationsServer do
 
   @impl true
   def handle_cast(:ack, %PendingOperationsServerState{} = state) do
-    case :queue.out(state.operations_queue) do
-      {{:value, _completed_operation}, new_queue} ->
-        case :queue.out(new_queue) do
-          {{:value, op}, _new_queue} ->
-            GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), op})
-            new_state = %{state | operations_queue: new_queue}
+    committed_queue =
+      with {{:value, _completed_operation}, committed_queue} <-
+             remove_completed_operation(state.operations_queue),
+           {{:value, next_operation}, _not_committed_queue} <- get_next_operation(committed_queue) do
+        GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), next_operation})
+        committed_queue
+      else
+        {:empty, committed_queue} ->
+          committed_queue
+      end
 
-            {:noreply, new_state}
+    new_state = %{state | operations_queue: committed_queue}
 
-          {:empty, _} ->
-            new_state = %{state | operations_queue: new_queue}
-            {:noreply, new_state}
-        end
+    {:noreply, new_state}
+  end
 
-      {:empty, _} ->
-        {:noreply, state}
+  defp remove_completed_operation(operations_queue) do
+    dequeue(operations_queue)
+  end
+
+  def get_next_operation(operations_queue) do
+    dequeue(operations_queue)
+  end
+
+  defp dequeue(queue) do
+    case :queue.out(queue) do
+      {{:value, operation}, new_queue} -> {{:value, operation}, new_queue}
+      {:empty, queue} -> {:empty, queue}
     end
   end
 end

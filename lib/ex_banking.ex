@@ -47,8 +47,11 @@ defmodule ExBanking do
       }
 
       case ExBanking.API.UserBalance.execute(user, operation) do
-        {:ok, user_balance} -> {:ok, user_balance}
-        {:error, :operation_state_full} -> {:error, :too_many_requests_to_user}
+        {:ok, user_balance} ->
+          {:ok, user_balance}
+
+        {:error, :operation_state_full} ->
+          {:error, :too_many_requests_to_user}
       end
     else
       :user_does_not_exist -> {:error, :user_does_not_exist}

@@ -24,7 +24,7 @@ defmodule ExBanking.MixProject do
     [
       {:typed_struct, "~> 0.3.0"},
       {:decimal, "~> 2.0"},
-      { :elixir_uuid, "~> 1.2" }
+      {:elixir_uuid, "~> 1.2"}
     ]
   end
 end
