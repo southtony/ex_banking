@@ -8,5 +8,7 @@ defmodule ExBanking.Types.ServerStates.PendingOperationsServerState do
   typedstruct enforce: true do
     field(:user_balance_server_name, server_name())
     field(:operations_queue, :queue.queue(Operation.t()))
+    field(:queue_impl, module())
+    field(:operations_limit, non_neg_integer())
   end
 end
