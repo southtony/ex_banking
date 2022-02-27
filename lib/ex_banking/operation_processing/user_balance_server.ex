@@ -7,14 +7,17 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
     Actions
   }
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts[:state], name: opts[:server_name])
+  @type server_name :: {:via, module(), term()}
+  @type on_start :: {:ok, pid()} | :ignore | {:error, {:already_started, pid()} | term()}
+  @type state :: %{(currency :: String.t()) => amount :: Decimal.t()}
+
+  @spec start_link(server_name: server_name(), state: state()) :: on_start()
+  def start_link(server_name: server_name, state: state) do
+    GenServer.start_link(__MODULE__, state, name: server_name)
   end
 
   @impl true
-  def init(state) do
-    {:ok, state}
-  end
+  def init(state), do: {:ok, state}
 
   @impl true
   def handle_cast(

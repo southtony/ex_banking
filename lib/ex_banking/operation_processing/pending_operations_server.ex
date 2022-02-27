@@ -6,8 +6,13 @@ defmodule ExBanking.OperationProcessing.PendingOperationsServer do
     ServerStates.PendingOperationsServerState
   }
 
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts[:state], name: opts[:server_name])
+  @type server_name :: {:via, module(), term()}
+  @type on_start :: {:ok, pid()} | :ignore | {:error, {:already_started, pid()} | term()}
+
+  @spec start_link(server_name: server_name(), state: PendingOperationsServerState.t()) ::
+          on_start()
+  def start_link(server_name: server_name, state: %PendingOperationsServerState{} = state) do
+    GenServer.start_link(__MODULE__, state, name: server_name)
   end
 
   @impl true
@@ -54,7 +59,7 @@ defmodule ExBanking.OperationProcessing.PendingOperationsServer do
     dequeue(queue_impl, operations_queue)
   end
 
-  def get_next_operation(queue_impl, operations_queue) do
+  defp get_next_operation(queue_impl, operations_queue) do
     dequeue(queue_impl, operations_queue)
   end
 
