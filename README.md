@@ -1,21 +1,31 @@
 # ExBanking
 
-**TODO: Add description**
+Users and operations.
+Every user in the system is a two-spawned process that keeps connected.
 
-## Installation
+The PendingOperationServer is a process that saves an operation that should be executed in its state. This state is a queue implementation.
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `ex_banking` to your list of dependencies in `mix.exs`:
+The UserServer is a process that saves a user's balance in its state and it has callback functions to update it.
 
-```elixir
-def deps do
-  [
-    {:ex_banking, "~> 0.1.0"}
-  ]
-end
-```
+Example: Three users in the ExBanking system
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/ex_banking](https://hexdocs.pm/ex_banking).
+![alt text](ex_banking.png?raw=true "ExBanking")
 
+Libraries
+
+`typed_struct` - for type describing
+
+`decimal` - for describe and calculate 2 decimal  precision numbers
+
+`elixir_uuid` - for testing only. For creating different users.
+
+`mock` - for testing. To mock some implementation
+
+Run project:
+
+- `./ex_banking iex -S mix run`
+- `./ex_banking mix test`
+
+
+- `docker run -it --rm --name ex_banking -v "$PWD":/usr/src/ex_banking -w /usr/src/ex_banking elixir iex -S mix`
+- `docker run -it --rm --name ex_banking -v "$PWD":/usr/src/ex_banking -w /usr/src/ex_banking elixir mix test`
