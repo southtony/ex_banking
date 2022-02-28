@@ -12,6 +12,8 @@ defmodule ExBanking.API.UserBalance do
 
     receive do
       msg -> msg
+    after
+      5_000 -> raise "Can't get reply from server"
     end
   end
 end

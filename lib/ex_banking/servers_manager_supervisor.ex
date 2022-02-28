@@ -28,7 +28,8 @@ defmodule ExBanking.ServersManagerSupervisor do
                user_balance_server_name: user_balance_server_name,
                operations_queue: queue_impl.new(),
                queue_impl: queue_impl,
-               operations_limit: 10
+               operations_limit: 10,
+               task_in_progress_exists?: false
              }
            ) do
       :ok

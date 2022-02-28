@@ -17,7 +17,10 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
   end
 
   @impl true
-  def init(state), do: {:ok, state}
+  def init(state) do
+    Process.flag(:trap_exit, true)
+    {:ok, state}
+  end
 
   @impl true
   def handle_cast(
@@ -69,6 +72,11 @@ defmodule ExBanking.OperationProcessing.UserBalanceServer do
     amount = state[currency] || Decimal.new(0)
     send(op.waiting_client, {:ok, Decimal.to_float(amount)})
     GenServer.cast(from, :ack)
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({:EXIT, _from, _reason}, state) do
     {:noreply, state}
   end
 end

@@ -221,4 +221,26 @@ defmodule ExBankingTest do
       assert eur_new_balance == 550.00
     end
   end
+
+  describe "servers" do
+    test "when user_balance_server shutdown", %{user: user} do
+      ExBanking.create_user(user)
+      ExBanking.deposit(user, 10, "usd")
+      ExBanking.deposit(user, 10, "usd")
+
+      {:ok, server} =
+        ExBanking.Core.ServerManager.get_server(
+          user,
+          %ExBanking.Types.Servers.UserBalanceServer{}
+        )
+
+      Process.exit(server, :shutdown)
+
+      Process.sleep(100)
+
+      ExBanking.deposit(user, 10, "usd")
+
+      assert {:ok, 30.00} = ExBanking.get_balance(user, "usd")
+    end
+  end
 end

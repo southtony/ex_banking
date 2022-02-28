@@ -16,20 +16,32 @@ defmodule ExBanking.OperationProcessing.PendingOperationsServer do
   end
 
   @impl true
-  def init(state), do: {:ok, state}
+  def init(state) do
+    Process.flag(:trap_exit, true)
+    {:ok, state}
+  end
 
   @impl true
   def handle_call({:add, %Operation{} = op}, _from, %PendingOperationsServerState{} = state) do
     if state.queue_impl.length(state.operations_queue) < state.operations_limit do
       new_queue = state.queue_impl.enqueue(op, state.operations_queue)
 
-      new_state = %{state | operations_queue: new_queue}
+      if !state.task_in_progress_exists? do
+        case state.queue_impl.dequeue(state.operations_queue) do
+          {:value, operation, _} ->
+            GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), operation})
+            new_state = %{state | operations_queue: new_queue, task_in_progress_exists?: true}
+            {:reply, :ok, new_state}
 
-      if state.queue_impl.length(state.operations_queue) == 0 do
-        GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), op})
+          {:empty, _} ->
+            GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), op})
+            new_state = %{state | operations_queue: new_queue, task_in_progress_exists?: true}
+            {:reply, :ok, new_state}
+        end
+      else
+        new_state = %{state | operations_queue: new_queue}
+        {:reply, :ok, new_state}
       end
-
-      {:reply, :ok, new_state}
     else
       send(op.waiting_client, {:error, :operation_state_full})
       {:reply, :ok, state}
@@ -38,35 +50,29 @@ defmodule ExBanking.OperationProcessing.PendingOperationsServer do
 
   @impl true
   def handle_cast(:ack, %PendingOperationsServerState{} = state) do
-    committed_queue =
-      with {:value, _completed_operation, committed_queue} <-
-             remove_completed_operation(state.queue_impl, state.operations_queue),
-           {:value, next_operation, _not_committed_queue} <-
-             get_next_operation(state.queue_impl, committed_queue) do
-        GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), next_operation})
-        committed_queue
-      else
-        {:empty, committed_queue} ->
-          committed_queue
+    {:value, _completed_operation, new_queue} = state.queue_impl.dequeue(state.operations_queue)
+
+    task_in_progress_exists? =
+      case state.queue_impl.dequeue(new_queue) do
+        {:value, operation, _new_queue} ->
+          GenServer.cast(state.user_balance_server_name, {:exec_operation, self(), operation})
+          true
+
+        _ ->
+          false
       end
 
-    new_state = %{state | operations_queue: committed_queue}
+    new_state = %{
+      state
+      | operations_queue: new_queue,
+        task_in_progress_exists?: task_in_progress_exists?
+    }
 
     {:noreply, new_state}
   end
 
-  defp remove_completed_operation(queue_impl, operations_queue) do
-    dequeue(queue_impl, operations_queue)
-  end
-
-  defp get_next_operation(queue_impl, operations_queue) do
-    dequeue(queue_impl, operations_queue)
-  end
-
-  defp dequeue(queue_impl, queue) do
-    case queue_impl.dequeue(queue) do
-      {:value, operation, new_queue} -> {:value, operation, new_queue}
-      {:empty, queue} -> {:empty, queue}
-    end
+  @impl true
+  def handle_info({:EXIT, _from, _reason}, state) do
+    {:noreply, state}
   end
 end
