@@ -1,17 +1,18 @@
 # ExBanking
 
-Users and operations.
+_Users and operations._
+
 Every user in the system is a two-spawned process that keeps connected.
 
-The PendingOperationServer is a process that saves an operation that should be executed in its state. This state is a queue implementation.
+The `PendingOperationServer` is a process that saves an operation that should be executed in its state. This state is a queue implementation.
 
-The UserServer is a process that saves a user's balance in its state and it has callback functions to update it.
+The `UserBalanceServer` is a process that saves a user's balance in its state and it has callback functions to update it.
 
-Example: Three users in the ExBanking system
+_Example: Three users in the ExBanking system_
 
 ![alt text](ex_banking.png?raw=true "ExBanking")
 
-Libraries
+_Libraries_
 
 `typed_struct` - for type describing
 
@@ -21,7 +22,7 @@ Libraries
 
 `mock` - for testing. To mock some implementation
 
-Run project:
+_Run project:_
 
 - `./ex_banking iex -S mix run`
 - `./ex_banking mix test`
